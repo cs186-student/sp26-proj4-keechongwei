@@ -23,6 +23,20 @@ public enum LockType {
         }
         // TODO(proj4_part1): implement
 
+        switch (a) {
+            case NL:
+                return true;
+            case IS:
+                return b == NL || b == IS || b == IX || b == S || b == SIX;
+            case IX:
+                return b == NL || b == IS || b == IX;
+            case S:
+                return b == NL || b == IS || b == S;
+            case SIX:
+                return b == NL || b == IS;
+            case X:
+                return b == NL;
+        }
         return false;
     }
 
@@ -54,6 +68,24 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        if (childLockType == NL) {
+            return true;
+        }
+        if (parentLockType == NL) {
+            return false;
+        }
+        switch (parentLockType) {
+            case IS:
+                return childLockType == IS || childLockType == S;
+            case IX:
+                return true;
+            case SIX:
+                return childLockType == X || childLockType == IX;
+            case S:
+                return false;
+            case X:
+                return false;
+        }
 
         return false;
     }
@@ -69,6 +101,27 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        if (required == NL) {
+            return true;
+        }
+        if (substitute == NL) {
+            return false;
+        }
+        if (substitute == X) {
+            return true;
+        }
+        switch (required) {
+            case S:
+                return substitute == S || substitute == SIX;
+            case IS:
+                return substitute == IS || substitute == IX || substitute == SIX;
+            case IX:
+                return substitute == IX;
+            case SIX:
+                return substitute == SIX;
+            case X:
+                return substitute == X;
+        }
 
         return false;
     }

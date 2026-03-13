@@ -25,19 +25,20 @@ public class TestLockType {
      * Compatibility Matrix
      * (Boolean value in cell answers is `left` compatible with `top`?)
      *
+     * Rain: i've filled it up based on the notes
      *     | NL  | IS  | IX  |  S  | SIX |  X
      * ----+-----+-----+-----+-----+-----+-----
      * NL  |  T  |  T  |  T  |  T  |  T  |  T
      * ----+-----+-----+-----+-----+-----+-----
-     * IS  |  T  |  T  |  T  |  T  |     |
+     * IS  |  T  |  T  |  T  |  T  |  T  |  F
      * ----+-----+-----+-----+-----+-----+-----
-     * IX  |  T  |  T  |  T  |  F  |     |
+     * IX  |  T  |  T  |  T  |  F  |  F  |  F
      * ----+-----+-----+-----+-----+-----+-----
      * S   |  T  |  T  |  F  |  T  |  F  |  F
      * ----+-----+-----+-----+-----+-----+-----
-     * SIX |  T  |     |     |  F  |     |
+     * SIX |  T  |  T  |  F  |  F  |  F  |  F
      * ----+-----+-----+-----+-----+-----+-----
-     * X   |  T  |     |     |  F  |     |  F
+     * X   |  T  |  F  |  F  |  F  |  F  |  F
      * ----+-----+-----+-----+-----+-----+-----
      *
      * The filled in cells are covered by the public tests.
