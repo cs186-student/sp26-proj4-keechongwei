@@ -59,6 +59,12 @@ public class LockManager {
          */
         public boolean checkCompatible(LockType lockType, long except) {
             // TODO(proj4_part1): implement
+            for (Lock lock : locks) {
+                if (lock.transactionNum == except) continue;
+                if (LockType.compatible(lock.lockType, lockType)){
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -69,7 +75,14 @@ public class LockManager {
          */
         public void grantOrUpdateLock(Lock lock) {
             // TODO(proj4_part1): implement
-            return;
+            //return;
+            for (int i = 1; i < locks.size(); i++) {
+                    if(locks.get(i).transactionNum == lock.transactionNum){
+                        locks.set(i, lock);
+                        List<Lock> transLock = transactionLocks.get(lock.transactionNum);
+                    }
+                }
+            }
         }
 
         /**
