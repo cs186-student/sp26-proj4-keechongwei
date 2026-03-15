@@ -29,7 +29,8 @@ import java.util.*;
  *    queue: S(A) X(A) S(A)
  * only the first request should be removed from the queue when the queue is
  * processed.
- */
+ **/
+
 public class LockManager {
     // transactionLocks is a mapping from transaction number to a list of lock
     // objects held by that transaction.
@@ -128,7 +129,7 @@ public class LockManager {
             return "Active Locks: " + Arrays.toString(this.locks.toArray()) +
                     ", Queue: " + Arrays.toString(this.waitingQueue.toArray());
         }
-    }
+
 
     // You should not modify or use this directly.
     private Map<String, LockContext> contexts = new HashMap<>();
