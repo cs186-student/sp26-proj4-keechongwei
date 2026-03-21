@@ -131,8 +131,13 @@ public class LockContext {
         // grant lock
         this.lockman.acquire(transaction,this.name,lockType);
         // update locks that transaction holds
-        this.numChildLocks.put(transaction.getTransNum(),
-                this.numChildLocks.getOrDefault(transaction.getTransNum(), 0) + 1);
+        if (parent != null) {
+            this.parent.numChildLocks.put(transaction.getTransNum(),
+                    this.parent.numChildLocks.getOrDefault(transaction.getTransNum(), 0) + 1);
+        }
+        else{
+            this.numChildLocks.put(transaction.getTransNum(), 0);
+        }
     }
 
     /**
@@ -171,8 +176,10 @@ public class LockContext {
         }
         this.lockman.release(transaction,this.name);
         // update locks that transaction holds
-        this.numChildLocks.put(transaction.getTransNum(), this.numChildLocks.get(transaction.getTransNum()) - 1);
-        return;
+        if (parent != null) {
+            this.parent.numChildLocks.put(transaction.getTransNum(), this.parent.numChildLocks.get(transaction.getTransNum()) - 1);
+            return;
+        }
     }
 
     /**
@@ -278,7 +285,52 @@ public class LockContext {
      */
     public void escalate(TransactionContext transaction) throws NoLockHeldException {
         // TODO(proj4_part2): implement
+        if (this.readonly){
+            throw new UnsupportedOperationException("Lock Context is read only");
+        }
+        if (this.lockman.getLockType(transaction,name) == LockType.NL){
+            throw new NoLockHeldException("Transaction Holds No Lock on Resource");
+        }
+        // hierarchy db -> table -> page
 
+        ArrayList<ResourceName> releaseNames = new ArrayList<>();
+        boolean escalateToX = false;
+        // escalate to least permissible , if no IX, then escalate to S
+        LockType currLockHeld = this.lockman.getLockType(transaction,name);
+
+        // gather all children names and if any have IX/X, must escalate to X
+        for (LockContext childLockContext: this.children.values()){
+            if (!childLockContext.children.isEmpty()){
+                for (LockContext descendantContext: childLockContext.children.values()){
+                    LockType descendantLockType = this.lockman.getLockType(transaction,descendantContext.getResourceName());
+                    if (descendantLockType == LockType.IX || descendantLockType == LockType.X){
+                        escalateToX = true;
+                    }
+                    if (descendantLockType != LockType.NL){
+                        releaseNames.add(descendantContext.getResourceName());
+                    }
+                }
+            }
+            childLockContext.numChildLocks.put(transaction.getTransNum(),0);
+            LockType childLockType = this.lockman.getLockType(transaction,childLockContext.getResourceName());
+            if (childLockType == LockType.IX || childLockType == LockType.X){
+                escalateToX = true;
+            }
+            if (childLockType != LockType.NL){
+                releaseNames.add(childLockContext.getResourceName());
+            }
+        }
+        if (currLockHeld == LockType.IX || currLockHeld == LockType.X){
+            escalateToX = true;
+        }
+        LockType newLockType = escalateToX ? LockType.X : LockType.S;
+        // If the current lock is different from the desired lock, perform the escalation
+        if (currLockHeld != newLockType) {
+            releaseNames.add(name);
+            this.lockman.acquireAndRelease(transaction,name,newLockType,releaseNames);
+        }
+        // Update the numChildLocks for this context to reflect any changes
+        this.numChildLocks.put(transaction.getTransNum(),this.numChildLocks.get(transaction.getTransNum()) - releaseNames.size() + 1);
         return;
     }
 
@@ -289,7 +341,9 @@ public class LockContext {
     public LockType getExplicitLockType(TransactionContext transaction) {
         if (transaction == null) return LockType.NL;
         // TODO(proj4_part2): implement
-        return LockType.NL;
+        else{
+            return this.lockman.getLockType(transaction,name);
+        }
     }
 
     /**
@@ -301,7 +355,21 @@ public class LockContext {
     public LockType getEffectiveLockType(TransactionContext transaction) {
         if (transaction == null) return LockType.NL;
         // TODO(proj4_part2): implement
-        return LockType.NL;
+        LockContext curParent = this.parent;
+        LockType out = getExplicitLockType(transaction);
+        while (curParent != null){
+            if (this.lockman.getLockType(transaction,curParent.getResourceName()) == LockType.X){
+                out =  LockType.X;
+            } else{
+                if (out != LockType.X){
+                    if(this.lockman.getLockType(transaction,curParent.getResourceName()) == LockType.S || this.lockman.getLockType(transaction,curParent.getResourceName()) == LockType.SIX){
+                        out = LockType.S;
+                    }
+                }
+            }
+            curParent = curParent.parent;
+        }
+        return out;
     }
 
     /**
