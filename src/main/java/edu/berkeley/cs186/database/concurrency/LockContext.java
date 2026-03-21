@@ -96,8 +96,43 @@ public class LockContext {
     public void acquire(TransactionContext transaction, LockType lockType)
             throws InvalidLockException, DuplicateLockRequestException {
         // TODO(proj4_part2): implement
+        // check if trying to acquire NL lock
+        if (lockType == LockType.NL){
+            throw new InvalidLockException("Cannot request NL lock on resource");
+        }
+        // check if LockContext is readonly
+        if (this.readonly){
+            throw new UnsupportedOperationException("Lock Context is Read Only");
+        }
+        // check existing lock that transaction holds
+        LockType currLockTypeHeld = this.lockman.getLockType(transaction,this.name);
+        // check if duplicate lock
+        if (currLockTypeHeld == lockType){
+            throw new DuplicateLockRequestException("Transaction already holds requested lock");
+        }
+        // prohibit owning S/IS if owned SIX
+        else if(currLockTypeHeld == LockType.SIX){
+            if (lockType == LockType.S || lockType == LockType.IS){
+                throw new InvalidLockException("Transaction already holds an SIX Lock");
+            }
+        }
+        else if(!LockType.compatible(currLockTypeHeld,lockType)){
+            throw new InvalidLockException("Requested Lock is not compatible with transaction's existing held locks");
+        }
 
-        return;
+        // check lock on parent
+        if (this.parent != null) {
+            LockType transLockOnParent = this.lockman.getLockType(transaction, this.parent.getResourceName());
+            if (transLockOnParent == LockType.IS && lockType == LockType.X) {
+                throw new InvalidLockException("Cannot Request 'X' on resource with 'IS' on parent");
+            }
+        }
+
+        // grant lock
+        this.lockman.acquire(transaction,this.name,lockType);
+        // update locks that transaction holds
+        this.numChildLocks.put(transaction.getTransNum(),
+                this.numChildLocks.getOrDefault(transaction.getTransNum(), 0) + 1);
     }
 
     /**
@@ -114,7 +149,29 @@ public class LockContext {
     public void release(TransactionContext transaction)
             throws NoLockHeldException, InvalidLockException {
         // TODO(proj4_part2): implement
-
+        // check if LockContext is readonly
+        if (this.readonly){
+            throw new UnsupportedOperationException("Lock Context is Read Only");
+        }
+        // check if any lock is on name
+        LockType currLockType = this.lockman.getLockType(transaction,this.name);
+        if (currLockType == LockType.NL){
+            throw new NoLockHeldException("Transaction does not hold a lock on the resource");
+        }
+        // check if lock cannot be released due to violating multigranularity locking constraints
+        // if transaction has X on a child, cannot release IX/SIX on this resource
+        // if transaction has S on a child, cannot release IS on this resource
+        for (LockContext childLockContext: this.children.values()){
+            LockType transLockOnChild = this.lockman.getLockType(transaction,childLockContext.getResourceName());
+            if (currLockType == LockType.IX || currLockType == LockType.SIX || currLockType == LockType.IS) {
+                if (transLockOnChild != LockType.NL) {
+                    throw new InvalidLockException("Releasing Lock will violate multigranularity locking constraints");
+                }
+            }
+        }
+        this.lockman.release(transaction,this.name);
+        // update locks that transaction holds
+        this.numChildLocks.put(transaction.getTransNum(), this.numChildLocks.get(transaction.getTransNum()) + 1);
         return;
     }
 
