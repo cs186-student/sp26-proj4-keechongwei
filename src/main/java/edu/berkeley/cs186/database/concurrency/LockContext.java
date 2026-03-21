@@ -171,7 +171,7 @@ public class LockContext {
         }
         this.lockman.release(transaction,this.name);
         // update locks that transaction holds
-        this.numChildLocks.put(transaction.getTransNum(), this.numChildLocks.get(transaction.getTransNum()) + 1);
+        this.numChildLocks.put(transaction.getTransNum(), this.numChildLocks.get(transaction.getTransNum()) - 1);
         return;
     }
 
