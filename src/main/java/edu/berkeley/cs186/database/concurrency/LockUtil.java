@@ -41,9 +41,56 @@ public class LockUtil {
         LockType effectiveLockType = lockContext.getEffectiveLockType(transaction);
         LockType explicitLockType = lockContext.getExplicitLockType(transaction);
 
+        if (requestType == LockType.NL){
+            return;
+        }
+        // if current lock type can already substitute requested lock type, leave it alone
+        else if (LockType.substitutable(effectiveLockType,requestType)){
+            return;
+        }
+        LockType intentType = (requestType == LockType.S) ? LockType.IS : LockType.IX;
+        ensureAncestors(lockContext, transaction, intentType);
+
+        if (explicitLockType == LockType.NL) {
+            // No lock held yet — just acquire
+            lockContext.acquire(transaction, requestType);
+        } else if (explicitLockType == LockType.IS && requestType == LockType.S) {
+            lockContext.escalate(transaction);
+        } else if (explicitLockType == LockType.IX && requestType == LockType.S) {
+            lockContext.promote(transaction, LockType.SIX);
+        } else if (explicitLockType.isIntent()) {
+            lockContext.escalate(transaction); // escalates to S or X
+            if (!LockType.substitutable(lockContext.getExplicitLockType(transaction), requestType)) {
+                lockContext.promote(transaction, requestType);
+            }
+        } else {
+            // Explicit non-intent lock (S) but need X: promote
+            lockContext.promote(transaction, requestType);
+        }
         // TODO(proj4_part2): implement
         return;
     }
 
+    private static void ensureAncestors(LockContext lockContext, TransactionContext transaction, LockType intentType) {
+        LockContext parent = lockContext.parentContext();
+        if (parent == null) return;
+
+        ensureAncestors(parent, transaction, intentType);
+
+        LockType parentExplicitLockType = parent.getExplicitLockType(transaction);
+
+        if (LockType.substitutable(parentExplicitLockType, intentType)) {
+            // Already sufficient (e.g. X or SIX satisfies IX; S or X satisfies IS)
+            return;
+        }
+
+        if (parentExplicitLockType == LockType.NL) {
+            parent.acquire(transaction, intentType);
+        } else if (parentExplicitLockType == LockType.IS && intentType == LockType.IX) {
+            // Need to upgrade IS -> IX on ancestor
+            parent.promote(transaction, LockType.IX);
+        }
+        // S/X/SIX already cover everything, handled by substitutable check above
+    }
     // TODO(proj4_part2) add any helper methods you want
 }

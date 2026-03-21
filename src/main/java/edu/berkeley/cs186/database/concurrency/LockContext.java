@@ -169,7 +169,7 @@ public class LockContext {
         for (LockContext childLockContext: this.children.values()){
             LockType transLockOnChild = this.lockman.getLockType(transaction,childLockContext.getResourceName());
             if (currLockType == LockType.IX || currLockType == LockType.SIX || currLockType == LockType.IS) {
-                if (transLockOnChild != LockType.NL) {
+                if (transLockOnChild != LockType.NL && !transLockOnChild.isIntent()) {
                     throw new InvalidLockException("Releasing Lock will violate multigranularity locking constraints");
                 }
             }
@@ -228,23 +228,24 @@ public class LockContext {
                 throw new InvalidLockException("Promotion will lead to Invalid State");
             }
         }
+        // promotion to SIX from IS/IX
+        if (newLockType == LockType.SIX){
+            if (hasSIXAncestor(transaction)){
+                throw new InvalidLockException("Ancestor already has SIX lock");
+            }
+            if (currLockHeld == LockType.S || currLockHeld == LockType.IX || currLockHeld == LockType.IS){
+                List<ResourceName> releaseNames = sisDescendants(transaction);
+                releaseNames.add(name);
+                this.lockman.acquireAndRelease(transaction,name,newLockType,releaseNames);
+                // reduce numChildLocks by num of S/IS locks released
+                this.numChildLocks.put(transaction.getTransNum(),this.numChildLocks.get(transaction.getTransNum()) - releaseNames.size());
+            }
+            return;
+        }
 
         // check validity of promotion
         if (LockType.substitutable(newLockType,currLockHeld)){
-            // promotion to SIX from IS/IX
-            if (newLockType == LockType.SIX){
-                if (hasSIXAncestor(transaction)){
-                    throw new InvalidLockException("Ancestor already has SIX lock");
-                }
-                if (currLockHeld == LockType.S || currLockHeld == LockType.IX || currLockHeld == LockType.IS){
-                    List<ResourceName> releaseNames = sisDescendants(transaction);
-                    this.lockman.acquireAndRelease(transaction,name,newLockType,releaseNames);
-                    // reduce numChildLocks by num of S/IS locks released
-                    this.numChildLocks.put(transaction.getTransNum(),this.numChildLocks.get(transaction.getTransNum()) - releaseNames.size());
-                }
-            }
-            this.release(transaction);
-            this.acquire(transaction,newLockType);
+            this.lockman.promote(transaction,name,newLockType);
         }
 
         return;
